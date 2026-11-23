@@ -1,455 +1,417 @@
-# Gupta Dental — 15% Off landing page
+# Gupta Dental — 15% Off landing page (v3)
 
-A standalone Google Ads landing page for Gupta Dental's two Kolkata clinics.
-Plain HTML, CSS and vanilla JavaScript. No build step, no frameworks, no npm
-dependencies. Every path is relative, so the folder works in any subdirectory.
+A single Google Ads landing page for Gupta Dental, Kolkata, plus its thank-you page.
+Pure HTML, CSS and vanilla JavaScript. No framework, no build step, no dependencies —
+upload the folder and it runs.
+
+- `index.html` — the landing page
+- `thank-you.html` — the conversion page leads land on
+- `js/config.js` — **every editable value lives here**
 
 ---
 
 ## 1. Pending items — fill these in before the page goes live
 
-| # | Item | Where | Status |
+| # | Item | Where | What is needed |
 |---|---|---|---|
-| 1 | **Six usual treatment prices** | `js/config.js` → `treatments[].usual` | **All `null`.** The page shows `₹____` in both columns until real numbers go in. |
-| 2 | **Offer expiry date** | `js/config.js` → `offer.expiry` | Placeholder `2026-12-31`. Confirm the real last day. |
-| 3 | **Offer terms line** | `js/config.js` → `offer.terms` | Draft wording — get the clinic to confirm. |
-| 4 | **GTM container ID** | `js/config.js` → `gtmId` | **Empty.** No tag fires until this is set. See §6. |
-| 5 | **WhatsApp numbers** | `js/config.js` → each clinic's `whatsapp` | Set to the two clinic phone numbers. **Confirm both are actually WhatsApp-enabled** before launch, or the button leads nowhere. |
-| 6 | **Rating** | `js/config.js` → `rating` | `null`, so the badge is hidden. See §2 before filling this in. |
-| 7 | **Patient videos** | `js/config.js` → `videos` | **Empty — no video files were in the project folder.** The whole video section is left out of the page. See §4. |
-| 8 | **₹499 check-up line** | `js/config.js` → `fourthPoint` | Decide whether the ₹499 check-up still runs alongside the 15% offer. Edit or replace the text. |
-| 9 | **Facebook / Instagram URLs** | `js/config.js` → `social` | Taken from the live site. Confirm they are current. |
-| 10 | **Marigold price contrast** | design decision | Fails WCAG. See §7 — needs a client decision, not a code change. |
+| 1 | **GTM container ID** | `js/config.js` → `gtmId` | Format `GTM-XXXXXXX`. While it is `""` **no tracking loads at all** — no GTM, no Google Ads conversion, no Meta pixel. The page works, but nothing is measured. This is the one item that blocks the ads going live. |
+| 2 | **Google review URLs** | `js/config.js` → `ratings[].url` | The Google Maps reviews link for each clinic. While a `url` is `""` the rating card is plain text; set it and the card becomes a link that opens Google in a new tab. |
+| 3 | **WhatsApp numbers** | `js/config.js` → `clinics.*.whatsapp` | Confirm **both** numbers are WhatsApp-enabled. If one is not, clear that value and the WhatsApp buttons for that clinic are left out rather than sending people to a dead chat. |
+| 4 | **`discount-15` in the Apps Script** | the Google Apps Script, `OFFERS` block | Every lead is sent with `offer: "discount-15"` and `source: "landing-page-15off"`. Confirm the script recognises that offer key, otherwise the column may land empty. |
+| 5 | **Usual (pre-offer) prices** | `js/config.js` → `prices[].usual` | **Needed before 31 December 2026.** The figures on the page are the prices *after* the 15% off, and no pre-offer prices are on file. On 1 January 2027 the whole pricing section therefore removes itself (see §5, "Prices"). Get the clinic's usual starting prices, enter them as `usual`, and the section can stay up with honest before-and-after figures. |
 
-**Not pending** — these were found and are already wired up:
-
-- **Webhook URL** — reused from the live `/book-appointment/` page, so leads land in
-  the same Google Sheet. No new Apps Script deployment needed.
-- **FAQ answers 3–6** — copied word for word from the live page.
-- Both addresses, phone numbers, opening hours, directions and map URLs.
+Also worth confirming with the client: the two Google ratings shown in the hero
+(**4.9 from 437 reviews** at Kankurgachi, **4.8 from 418 reviews** at Dum Dum Seven Tanks)
+must match what the Google Business Profiles actually show on the day the ads start.
 
 ---
 
-## 2. A note on the rating
+## 2. Lead capture — the contract
 
-The live `/book-appointment/` page shows **"5.0 rating from 450+ patient reviews"**.
-That figure has **not** been copied onto this page. `rating` is `null`, so the badge
-is hidden entirely.
+Both forms post to the same Google Apps Script the client's own
+`guptasdental.com/book-appointment/` page uses, so leads land in the same sheet and
+trigger the same emails (`gdfclinic@gmail.com`, `plandleadtest@gmail.com`).
 
-Fill it in only with a number the clinic can evidence from its own Google Business
-Profile:
+**Endpoint** — `js/config.js` → `webhookUrl`.
 
-```js
-rating: { text: "5.0 from 450+ Google reviews" }
-```
-
-The badge then appears as the first item in the hero trust strip. Leave it `null`
-and nothing is shown — no gap, no placeholder.
-
----
-
-## 3. Editing the page
-
-**Everything editable lives in `js/config.js`.** You should not need to touch the
-HTML, CSS or `main.js` for routine changes.
-
-### Prices
-
-Enter the **usual** (pre-discount) price as a plain number. The discounted price is
-always calculated — never type it by hand.
+**The request:**
 
 ```js
-{ key: "root-canal", label: "Root canal treatment", usual: 6000, need: "Root canal treatment" },
+fetch(ENDPOINT, {
+  method: "POST",
+  body: JSON.stringify(payload),
+  headers: { "Content-Type": "text/plain;charset=utf-8" },
+  signal: ctrl.signal                      // AbortController, 12-second timeout
+})
+  .then(res => res.json())
+  .then(data => (data && data.status === "ok") ? redirectToThankYou() : fail())
+  .catch(fail);
 ```
 
-With `offer.percent: 15` and `offer.rounding: 1`, ₹6,000 displays as **₹5,100**.
-Set `rounding: 10` or `100` to round the discounted figure to the nearest ten or
-hundred rupees. Leave `usual: null` and that row shows `₹____` in both columns.
+Three rules that must not be broken:
 
-### The offer and its expiry
+1. **`Content-Type` is `text/plain;charset=utf-8`, never `application/json`.** Anything
+   else makes this a non-simple request, the browser sends a CORS preflight, and Apps
+   Script cannot answer it.
+2. **No `mode: "no-cors"`.** An opaque response cannot be read, so a failed lead would
+   look like a success and the visitor would be sent to the thank-you page anyway.
+3. **The visitor only reaches the thank-you page when the script answers
+   `{"status":"ok"}`.** Anything else shows the error message and keeps what they typed.
 
-```js
-offer: { percent: 15, expiry: "2026-12-31", terms: "…", rounding: 1 }
+**The payload** — these keys, in this order, with these exact names:
+
+```
+name, mobile, clinic, treatment, offer, source, page,
+gclid, fbclid, utm_source, utm_medium, utm_campaign, utm_term,
+referrer, hp, utm_content, gbraid, wbraid, form_location
 ```
 
-The offer is valid **up to and including** the expiry date, in Asia/Kolkata time.
-The day after it passes, the page automatically:
-
-- hides **both** 15% OFF badges,
-- hides the **"With 15% off"** column and the strike-through on the usual prices,
-- changes the price board heading to **"Our treatment prices"**,
-- drops the offer from the WhatsApp messages and FAQ 1,
-- logs a console warning.
-
-The page can never display an expired offer. This was tested by setting the expiry
-to a past date — all of the above fired correctly.
-
-### Opening hours
-
-`hours` is an array, **index 0 = Sunday** through **6 = Saturday**. Use `null` for a
-closed day:
-
-```js
-hours: [ {open:"10:00",close:"21:00"}, …, null, … ]   // null = closed that day
-```
-
-The hero "Open today" pill, the per-clinic status lines in the urgent-care band and
-the chooser all read from this and are worked out live in Asia/Kolkata time,
-whatever timezone the visitor is in. Nothing about opening hours is hard-coded.
-
----
-
-## 4. Patient videos
-
-**No video files were supplied in the project folder**, so section 4.8 of the brief
-could not be built with real footage. Rather than ship empty players or stock
-footage, the section is omitted until `config.videos` is filled in.
-
-To add them:
-
-1. Put the two `.mp4` files in `assets/video/`.
-2. Put a poster image for each in `assets/img/`. To pull a frame from a video:
-   `ffmpeg -i assets/video/patient-1.mp4 -ss 00:00:01 -frames:v 1 assets/img/poster-1.jpg`
-3. Fill in the array:
-
-```js
-videos: [
-  { src: "assets/video/patient-1.mp4", poster: "assets/img/poster-1.jpg",
-    width: 720, height: 1280, type: "video/mp4" },
-  { src: "assets/video/patient-2.mp4", poster: "assets/img/poster-2.jpg",
-    width: 720, height: 1280, type: "video/mp4" }
-]
-```
-
-The section then appears with `preload="none"` on both players — no video data is
-downloaded until the visitor presses play.
-
-The live site references `patient-review-1.mp4` and `patient-review-2.mp4`; those
-files are the ones to copy over.
-
----
-
-## 5. URL parameters for the paid team
-
-Add these to the **final URL** of an ad or ad group. They can be combined.
-
-### `?t=` — treatment match
-
-Pre-selects the matching option in **both** booking forms and puts a marigold left
-border on the matching price-board row. **The H1 never changes.** Unknown values are
-ignored silently.
-
-| Value | Pre-selects | Highlights price row |
-|---|---|---|
-| `?t=root-canal` | Root canal treatment | yes |
-| `?t=crown` | Crown or bridge | yes |
-| `?t=scaling` | Scaling & polishing | yes |
-| `?t=filling` | Tooth filling | yes |
-| `?t=implant` | Dental implant / missing teeth | yes |
-| `?t=whitening` | Teeth whitening | yes |
-| `?t=braces` | Braces or clear aligners | no row |
-| `?t=child` | Child's dental visit | no row |
-
-### `?clinic=` — location match
-
-For location-split ad groups. Pre-selects the clinic everywhere on the page: both
-form dropdowns, the clinic card, every Call button, the sticky bar and every
-WhatsApp link.
-
-| Value | Clinic |
+| Key | Value |
 |---|---|
-| `?clinic=kankurgachi` | Phoolbagan / Kankurgachi |
-| `?clinic=sevenTanks` | Seven Tanks / South Dum Dum |
+| `mobile` | Normalised to 10 digits. Spaces, `-` and `()` are stripped, then a leading `+91`, `91` or `0`. Must match `/^[6-9]\d{9}$/`. |
+| `clinic` | The option **value** — `Phoolbagan` or `Seven Tanks`. Never the display label. |
+| `treatment` | The option label, e.g. `Root canal treatment`. |
+| `offer` | `discount-15` |
+| `source` | `landing-page-15off` |
+| `page` | `location.href` |
+| `hp` | The honeypot field. **Always sent, even when empty** — the Apps Script decides what is spam, not the page. |
+| attribution | Read **once** from the landing URL and held in memory for the life of the page. |
+| last four | `utm_content`, `gbraid`, `wbraid` and `form_location` are additions, and sit after `hp`. |
 
-**Example final URL:**
+**On success** the visitor goes to
+`thank-you.html?clinic=<phoolbagan|seventanks>&t=<treatment key>&offer=discount-15`.
 
-```
-https://guptasdental.com/15-off/?t=implant&clinic=sevenTanks
-```
+**On failure** the button comes back, everything typed is kept, and this appears under
+the form (`js/config.js` → `formError`):
 
-### Campaign tracking
+> Your request didn't go through. Please try again, or call us directly on
+> +91 90385 95251 (Kankurgachi) or +91 84200 22591 (Dum Dum Seven Tanks).
 
-`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`,
-`gbraid` and `wbraid` are read from the URL on landing, held in `sessionStorage`
-for the session, and attached to **every** form submission — including one made
-after the visitor has clicked around the page.
+### Debugging a lead
+
+Open the page with `?debug=1` and the exact payload is logged to the browser console
+just before it is sent. Without that flag nothing is logged, because the payload holds
+the visitor's name and mobile number.
 
 ---
 
-## 6. Tracking
+## 3. Tracking
 
-### Turning it on
-
-Put the container ID in `js/config.js`:
-
-```js
-gtmId: "GTM-XXXXXXX",
-```
-
-While it is `""` **no GTM snippet is written at all** — no request, no console
-noise. The container is injected by `js/main.js` as its first action, from a
-deferred script, so it never blocks the first paint.
-
-There is also a commented-out `<noscript>` GTM block near the top of `<body>` on
-both pages. It only does anything with JavaScript switched off — and this page's
-forms need JavaScript — so it is left commented by default. Uncomment it and paste
-the same ID if your setup needs image-based tags.
+Nothing loads until `gtmId` is set in `js/config.js`. Once it is, the GTM snippet is
+written on both pages.
 
 ### dataLayer events
 
-| Event | Fires on | Parameters |
+| Event | Fires when | Parameters |
 |---|---|---|
-| `generate_lead` | Successful form submit | `clinic`, `treatment`, `form_location` (`hero` / `footer`), `phone` |
-| `click_call` | **Every** `tel:` link on the page | `clinic`, `click_location` |
-| `click_whatsapp` | Every WhatsApp link | `clinic`, `click_location` |
-| `price_row_click` | Tapping a price-board row | `treatment` |
-| `concern_chip_click` | Tapping a concern chip | `concern` |
+| `click_to_call` | any `tel:` link is clicked | `clinic`, `click_location` |
+| `whatsapp_click` | any `wa.me` link is clicked | `clinic`, `click_location` |
+| `price_row_click` | a price row is tapped | `treatment`, `treatment_key` |
+| `symptom_chip_click` | a concern card is tapped | `concern`, `treatment` |
+| `click_directions` | a **Get directions** button is clicked | `clinic` |
+| `generate_lead` | **the thank-you page loads** | `clinic`, `treatment`, `offer` |
 
-`click_location` values: `header`, `hero`, `sticky`, `urgent`, `clinic_card`,
-`footer`, `float`, `chooser`, `form_error`, `thank_you`.
-
-Call tracking was called out as a weak spot on this account, so **every** call
-button fires `click_call` — verified: 14 call links across 7 distinct locations,
-each carrying a clinic.
-
-`phone` on `generate_lead` is the normalised 10-digit number, ready for Enhanced
-Conversions. Map it to the user-provided-data field in GTM; it is **not** hashed
-client-side — GTM does that.
+`generate_lead` fires in exactly one place — `js/thank-you.js` — so it can never be
+double-counted. It pushes to `dataLayer`, and also calls `gtag("event", …)` and
+`fbq("track", "Lead", …)` if either is present on the page.
 
 ### Conversion page
 
-`thank-you.html` is the Google Ads conversion page. It is `noindex`, carries the
-same GTM container, and is only reachable after a successful submit.
+`thank-you.html` is the Google Ads conversion page. Its inline `<head>` script reads the
+query string once, whitelists every value against a fixed list and hands the result to
+`js/thank-you.js` as `window.__TY`. Nothing downstream reads `location.search`, so
+nothing from the URL can reach the page as markup.
 
-A honeypot hit shows the visitor the success state but sends **nothing** to the
-webhook and fires **no** `generate_lead` — so bot traffic cannot pollute your
-conversion data.
+Note the treatment parameter is **`t`**, not `treatment`.
 
 ---
 
-## 7. Accessibility and contrast
+## 4. URL parameters for the paid team
 
-Measured ratios for every text/background pair in the design system:
+### `?t=` — treatment match
 
-| Text | Background | Ratio | WCAG AA |
-|---|---|---|---|
-| Ink teal `#0B3B39` | Porcelain `#F5F7F6` | 11.49:1 | pass |
-| Ink teal `#0B3B39` | White `#FFFFFF` | 12.36:1 | pass |
-| Charcoal `#16211F` | Porcelain | 15.35:1 | pass |
-| Charcoal `#16211F` | White | 16.52:1 | pass |
-| Ink teal on button | Marigold `#F0A032` | 5.76:1 | pass |
-| White | Ink teal band | 12.36:1 | pass |
-| Marigold `#F0A032` | Ink teal band | 5.76:1 | pass |
-| Ink teal | WhatsApp green `#25D366` | 6.23:1 | pass |
-| **Marigold `#F0A032`** | **White (price figures)** | **2.15:1** | **FAIL** |
-| ~~White~~ | ~~WhatsApp green~~ | ~~1.98:1~~ | avoided — see below |
+Pre-selects "What can we help with?" in **both** forms and highlights the matching price
+row. Unknown values are ignored; nothing else on the page changes.
 
-### The two findings
+| `?t=` | Pre-selects |
+|---|---|
+| `root-canal` | Root canal treatment |
+| `crown` | Crown or bridge |
+| `scaling` | Teeth scaling and polishing |
+| `filling` | Tooth filling |
+| `implant` | Dental implant or missing teeth |
+| `whitening` | Teeth whitening |
+| `laser-gum` | Bleeding or swollen gums |
+| `braces` | Braces or clear aligners |
+| `child` | Child's dental visit |
+| `toothache` | Toothache |
 
-**1. Marigold prices on white fail at 2.15:1.** Large text needs 3:1; this is well
-under. It is the only accessibility failure on the page and the only reason the
-Lighthouse accessibility score is 97 rather than 100.
+Also accepted, via `treatmentAliases` in `js/config.js`: `rct`, `gums`, `gum`, `bridge`,
+`aligners`. Three more keys exist for the remaining dropdown options and can be used the
+same way: `broken`, `dentures`, `checkup`, `unsure`.
 
-The design system is fixed by the brief, so **this has not been changed.** It needs
-a client decision. The options, in order of preference:
+### `?clinic=` — location match
 
-- Use a darker marigold **for the price figures only**, keeping the bright marigold
-  for buttons and the offer badge: **`#D48210`** gives exactly 3.00:1 (AA for large
-  text), **`#AA670C`** gives 4.51:1 (AA for all text). Both keep the same hue and
-  saturation, so they still read as the brand accent.
-- Or set the price figures in ink teal `#0B3B39` (12.36:1) and let the strike-through
-  on the usual price carry the contrast.
-- Or accept it as a documented exception.
+Pre-selects the clinic in both forms and points every Call and WhatsApp button at it.
 
-To apply a fix, change one value in `css/styles.css`:
+| `?clinic=` | Selects |
+|---|---|
+| `phoolbagan`, `kankurgachi`, `phool-bagan`, `cit-road` | Kankurgachi |
+| `seventanks`, `seven-tanks`, `dumdum`, `dum-dum`, `southdumdum` | Dum Dum Seven Tanks |
 
-```css
-.price-now { color: #D48210; }   /* was var(--marigold) */
+Unknown values are ignored. A clinic the visitor picks is remembered in `sessionStorage`
+for the rest of their session.
+
+### Campaign tracking
+
+`gclid`, `fbclid`, `gbraid`, `wbraid`, `utm_source`, `utm_medium`, `utm_campaign`,
+`utm_term` and `utm_content` are read from the landing URL and sent with every lead.
+
+They can be combined freely:
+
+```
+?t=implant&clinic=dumdum&utm_source=google&utm_medium=cpc&gclid=…
 ```
 
-**2. White on WhatsApp green is only 1.98:1**, so the WhatsApp buttons use **ink teal
-text on WhatsApp green (6.23:1)** instead. The green itself is unchanged, as the
-brief requires.
+---
 
-### Everything else
+## 5. Editing the page
 
-- Semantic landmarks, exactly one `<h1>`, logical heading order.
-- A skip link to the booking form.
-- Every field has a real `<label>`, not just a placeholder.
-- Inline errors at 15px with `aria-describedby` and `aria-invalid`. No `alert()`.
-- Visible marigold 2px focus rings everywhere.
-- `prefers-reduced-motion` respected — smooth scrolling and all reveals are disabled.
-- The price board is a real `<table>` with explicit ARIA roles, so it still reads as
-  a table to a screen reader even where it is restyled into cards on mobile.
-- **No text anywhere on either page is below 15px** (verified by scanning every
-  rendered element).
-- Clinic cards expose a real "Choose this clinic" button carrying `aria-pressed`,
-  rather than an invalid `role="button"` on an `<article>`.
+Everything a non-developer should need is in `js/config.js`.
+
+### Prices
+
+`prices[]`. Every figure is a **fixed display string**. No discount is calculated
+anywhere on the page, and none ever should be.
+
+```js
+{ key: "root-canal", label: "Root Canal Treatment (RCT)", price: "₹5,000", usual: null, need: "Root canal treatment" }
+```
+
+- **`price` is the price *after* the 15% off.** That is what the section is labelled as:
+  "Prices after 15% off, until 31 December 2026".
+- **`usual` is the clinic's usual, pre-offer starting price, and is `null`** because we
+  do not have those figures. **Never work one out backwards from the offer price.** Fill
+  it in as a display string (`"₹5,900"`) and the row shows it struck through in front of
+  the offer price; leave it `null` and the row shows the offer price alone.
+- `need` is the dropdown option the row pre-selects, and must match a `label` in
+  `treatments[]` exactly.
+
+**What happens when the offer ends.** `offer.expiry` is `2026-12-31`. Once the date in
+Asia/Kolkata passes it, the `price` figures are no longer prices the clinic can honour,
+and there is nothing to fall back on, so `js/main.js` removes the whole pricing section,
+the offer pill and the mobile offer chip, and logs a console warning. The page can never
+show an expired offer price.
+
+To keep the section alive past that date, add a `usual` price to every treatment, update
+the caption and the notes, and move `offer.expiry` on.
+
+### Treatment options
+
+`treatments[]` drives the `?t=` deep link and the thank-you page. The `label` is both the
+option value and what is sent as `treatment`.
+
+If you add an option, add it in **three** places: `treatments[]` in `js/config.js`, the
+two `<select name="treatment">` lists in `index.html`, and the `TREATMENTS` whitelist in
+the inline `<head>` script of `thank-you.html`.
+
+### Clinics
+
+`clinics.phoolbagan` and `clinics.seventanks`. `key` is what appears in the URL,
+`formValue` is the option value and what is sent as `clinic`, `name` is what visitors see.
+
+### The offer
+
+`offer.badge` and `offer.chip` are the visible copy. `offer.key` and `offer.source` are
+what the Apps Script receives. The dates in the FAQ, the price notes and the hero are
+written into `index.html` directly, because they are approved client copy — if the offer
+is extended, search `index.html` for `31 December 2026`.
+
+### Footer social links
+
+`social.facebook` and `social.instagram`. Clear a URL to `""` and that icon is left out.
+No link is ever written as `#`.
+
+---
+
+## 6. Design system
+
+| Token | Hex | Used for |
+|---|---|---|
+| Ink teal | `#0B3B39` | Headings, dark bands, **Call** buttons, footer |
+| Porcelain | `#F5F7F6` | Page background |
+| Enamel | `#FFFFFF` | Cards, forms |
+| Tint | `#EAF1F0` | Card fills, icon tiles, soft bands |
+| Marigold | `#F0A032` | **Booking buttons and the offer badge only** |
+| Charcoal | `#16211F` | Body text |
+| WhatsApp | `#25D366` | WhatsApp buttons only |
+
+The button hierarchy is deliberate and is a conversion fix: **marigold means book**,
+**ink teal means call**, **green means WhatsApp**. Nothing else uses marigold. If Call
+buttons are ever made orange again, they will compete with the booking buttons.
+
+Fraunces 600 for headings and prices, Public Sans 400/600 for everything else. Body text
+is 17px on mobile and 18px on desktop, and **nothing on the page is set below 15px**.
+Container 1180px with 24px gutters; sections 88px top and bottom on desktop, 56px on
+mobile. Cards are 16px radius with a 1px `rgba(11,59,57,.10)` hairline; the soft shadow
+is reserved for the hero photo and the form cards. Icons are inline Lucide-style SVG in
+48px tint tiles — no emojis and no icon font.
+
+One motion rule: a 200ms fade-up on scroll, nothing above the fold, and nothing at all
+when `prefers-reduced-motion` is set.
+
+---
+
+## 7. Page order
+
+1. Hero — a welcome from Dr. Ayon Gupta, the offer badge, "Why visit Gupta Dental", the
+   two Google rating cards, and his photo
+2. Booking — copy on the left, the form card on the right (form first on mobile)
+3. Prices — the copy and notes on the left, the price card on the right
+4. What brings you in today? — eight tappable concern cards
+5. Treatments available at both clinics
+6. Meet Dr. Ayon Gupta
+7. Why patients choose Gupta Dental
+8. Dealing with dental pain today? — the ink-teal band
+9. Answers before you book — the FAQ on the left, the second booking form on the right
+10. Find your nearest clinic — a map, address, hours and buttons per clinic
+
+Plus the footer, the mobile sticky bar with its offer chip, the desktop WhatsApp button,
+and the clinic chooser.
+
+**Removed in v3:** the patient videos section and the "Both clinics" map section. They
+are not in the approved content. Their assets are still in the folder. (v3.1 brought
+maps back, in the new §10, as a per-clinic card rather than a single wide map.)
+
+### Two-column sections
+
+Sections 3 and 9 are both `grid` with `align-items: start`, and nothing above the grid,
+so the two columns start at exactly the same height. The shorter column is `position:
+sticky` at `--stick-top`, which is the header's real height plus 32px.
+
+`--header-h` is published onto `:root` by `js/main.js` from the header's measured
+`offsetHeight`, and kept up to date through a `ResizeObserver` and the logo's `load`. The
+stylesheet carries measured fallbacks (70px mobile, 96px desktop) so the offsets are
+right even before the script runs. Form cards use the same variable for their
+`scroll-margin-top`.
+
+A sticky column can only travel the difference between its own height and the row's
+height. In §3 the two columns are close in height, so the left column holds for about
+120px and then moves with the card. In §9 the form holds for as long as the FAQ is
+taller, which is most of the time once a visitor opens a second question.
+
+### Behaviour worth knowing
+
+- The mobile sticky bar and the offer chip stand down whenever a form card is on screen,
+  and over the hero, where the bar would otherwise cover the hero's own Request button on
+  a 375×667 screen. The chip also hides while the hero offer badge — which it repeats
+  word for word — is visible.
+- The two Google Maps iframes are **not** part of the page on load. `js/main.js` injects
+  them when §10 comes within 200px of the viewport, and each iframe also carries
+  `loading="lazy"` and a `title`. Nothing is requested from Google until a visitor scrolls
+  that far. Both `mapEmbedUrl` and `directionsUrl` live in `js/config.js` per clinic, so
+  they can be swapped for the exact Google Business Profile links later.
+- Any Call button with no clinic selected opens the clinic chooser first. Choosing a
+  clinic dials it, remembers it, and syncs both forms' Preferred clinic field.
+- Both forms share one set of validation and submission code (`initForm` in `js/main.js`).
+  Changing one changes both.
 
 ---
 
 ## 8. What was tested
 
-Verified in Chrome against a local server with gzip and cache headers, matching how
-Hostinger serves the files.
+Checked in Chrome against a local server, at 360px, 375×667, 390px, 768px and 1440px.
 
-**Lighthouse (mobile):**
-
-| | Score |
-|---|---|
-| Performance | **100** |
-| Accessibility | **97** (the marigold price contrast above) |
-| Best Practices | **100** |
-| SEO | 63 — **expected and correct**, because the page is `noindex` by design |
-
-LCP **1.2s** · FCP **0.8s** · CLS **0** · TBT **10ms** · Speed Index **0.8s**
-(Desktop: Performance 100, Accessibility 97, Best Practices 100.)
-
-**Layout** — 360, 375, 390, 414, 768, 1024, 1280 and 1440px. No horizontal scroll,
-no clipping or overflow at any width.
-
-**Form position on mobile** — the booking form starts at **432px** at both 375×667
-and 390×844, well inside the first screen. At 375×667 the first screen shows the
-logo, Call button, eyebrow, live "open now" pill, H1, the 15% OFF badge, the form
-heading and the first two fields.
-
-**Price board** — all six rows map to the right form option; rows are 85px tall on
-desktop and 106px on mobile (brief asked for 44px minimum, 56px target). The 15%
-maths was checked against test prices, including the rounding edge case
-₹9,999 → ₹8,499. With prices `null`, both columns show `₹____`.
-
-**Concern chips** — all eight map to the correct dropdown option in both forms.
-
-**URL parameters** — every `?t=` value pre-selects in both forms and highlights the
-right row; unknown values are ignored and the H1 never changes. `?clinic=` syncs
-both dropdowns, the card, every call link and every WhatsApp link.
-
-**Validation** — `12345` and `+91 5000000000` are rejected with an inline message;
-`9876543210`, `+91 98765 43210` and `098765 43210` all normalise to `9876543210`.
-
-**Submission** — payload carries 18 fields including all eight ad parameters and an
-IST timestamp; sent as `text/plain` JSON with `mode: "no-cors"` (no CORS preflight,
-which is what the existing Apps Script expects); redirects to `thank-you.html` with
-clinic and treatment; fires exactly one `generate_lead`.
-
-**Failure path** — on a network error the visitor stays on the page, sees both
-clinic phone numbers, the button is re-enabled, and **nothing they typed is
-cleared**.
-
-**Honeypot** — shows the success state, makes no network call, fires no conversion.
-
-**Offer expiry** — set to a past date, both badges and the discount column
-disappeared, the heading changed, and the console warning fired. Restored after.
-
-**Clinic selection** — syncs in both directions between the two cards, both
-dropdowns, all 14 call links, every WhatsApp link and the sticky bar; persists in
-`sessionStorage`. With nothing selected, Call opens the two-clinic chooser.
-
-**Sticky bar** — hides whenever either form is on screen, returns when it is not.
-
-**Maps** — confirmed not loaded on page load; only the holder scrolled near the
-viewport injected its iframe.
-
-**Console** — no errors or warnings on either page, across three URL variations.
+- **Two live leads** were sent end to end, both named `TEST Plan D` on mobile
+  `9999999999`. **Delete both rows from the sheet.**
+  - v3, from the booking form: Kankurgachi, Root canal treatment → `status: "ok"`, landed
+    on `thank-you.html?clinic=phoolbagan&t=root-canal&offer=discount-15`.
+  - v3.1, from the form inside the merged FAQ section: Dum Dum Seven Tanks, Teeth
+    whitening → `status: "ok"`, landed on
+    `thank-you.html?clinic=seventanks&t=whitening&offer=discount-15`.
+  - Both times `generate_lead` was the only event in `dataLayer`.
+- The payload's keys and their order were confirmed against the contract above, with
+  `+91 99999-99999` normalising to ten digits.
+- With a deliberately wrong endpoint: no redirect, the error copy appears, the button
+  comes back, and every field keeps what was typed.
+- All seven price rows and all eight concern cards pre-select the right option in **both**
+  forms.
+- Every `?t=` and `?clinic=` value above, plus unknown values, which are ignored.
+- 375×667: the offer badge, both rating cards and the Request button all sit on the first
+  screen, with nothing covering them.
+- 1440px: the pricing columns both start at y=1771, and the FAQ H2 and the form card both
+  start at y=5941. Both shorter columns compute to `position: sticky` at `top: 128px`.
+- 390px: the pricing section reads eyebrow → H2 → intro → price card → notes, the FAQ
+  comes before its form, and Dum Dum Seven Tanks comes before Kankurgachi.
+- All seven prices render unchanged and are labelled as prices after the 15% off. No
+  `usual` price is shown, because none is on file.
+- With `offer.expiry` temporarily set to yesterday: the pricing section, the offer pill
+  and the mobile offer chip all disappeared and the console warning appeared. The date
+  was then set back to `2026-12-31`.
+- Both maps are absent on load and appear only once §10 is scrolled near. Each Get
+  directions button opens the right clinic in a new tab and fires `click_directions`.
+- No horizontal scroll and no text under 15px at any width tested. No console errors.
 
 ### Not verified
 
-- **Real-device testing on iOS Safari, Samsung Internet and Firefox.** The code
-  avoids everything that usually breaks them — no `<dialog>` (the chooser is a plain
-  overlay, so iOS 15.0–15.3 is fine), 16px form fields so iOS does not zoom on focus,
-  `env(safe-area-inset-bottom)` on the sticky bar, no optional chaining or modern
-  syntax — but it was tested in Chrome only.
-- **A live end-to-end form submission** to the Google Sheet. Submissions were
-  intercepted in testing so as not to post junk rows into the clinic's real sheet.
-  Do this once after upload — see §10.
+- Safari and Firefox (Chrome only).
+- Real phone hardware — the mobile sizes were tested at those viewport widths in Chrome.
+- Whether the lead reached the Google Sheet and the two email addresses. The script
+  answered `ok`; the sheet itself was not opened.
+- Whether `discount-15` is a key the Apps Script's `OFFERS` block recognises.
+- Whether both numbers are WhatsApp-enabled.
 
 ---
 
 ## 9. Files
 
 ```
-2nd lp/
-  index.html              the landing page
-  thank-you.html          conversion page (noindex)
-  css/styles.css          full stylesheet (critical CSS is inlined in each page's head)
-  js/config.js            EVERY editable value
-  js/main.js              all page logic
-  assets/img/             optimised images (WebP + fallback)
-  assets/video/           empty — patient videos go here
-  README.md               this file
-
-  dr-ayon-gupta.png       ORIGINAL — untouched
-  dr-ayon-gupta.jpg       ORIGINAL — untouched
-  dr-ayon-gupta.webp      ORIGINAL — untouched
-  logo.png                ORIGINAL — untouched
-  favicon.png             ORIGINAL — untouched
+index.html              the landing page
+thank-you.html          the conversion page
+css/styles.css          the whole stylesheet
+js/config.js            every editable value
+js/main.js              the landing page's behaviour
+js/thank-you.js         the thank-you page, and the only generate_lead
+README.md               this file
+assets/img/
+  hero-dr-ayon-gupta.jpg / .webp     the hero photo (800x1000)
+  dr-ayon-gupta.jpg / .webp          the 96px avatar in "Meet Dr. Ayon Gupta"
+  clinic-treatment-room.jpg / .webp  booking section, left photo (900x675)
+  clinic-consultation-room.jpg/.webp booking section, right photo (900x675)
+  logo.png / .webp                   the header logo
+  favicon.png
 ```
 
-The five original files in the root are left exactly as they were. Every resized or
-converted copy lives in `assets/img/`. The originals are not referenced by the page
-and can be left out of the upload if you prefer.
+The loose `dr-ayon-gupta.*`, `logo.png` and `favicon.png` in the folder root are leftovers
+from the first build. Nothing references them; the page uses the copies in `assets/img/`.
 
-### Which asset is used where
+The two clinic photos in the booking section come from the originals
+`PHOTO-2025-03-12-23-51-41 3.jpg` (treatment room) and
+`PHOTO-2025-03-12-23-51-41 18.jpg` (consultation room), which are still in the folder
+root. They are 2268x4032 portrait phone shots, so each was cropped to 4:3 around the part
+of the room worth showing and resized to 900px wide — the cards display them in a roughly
+4:3 landscape box. Neither file name says which clinic it is, so the alt text describes
+the room without naming a location. If the client can say which clinic each belongs to,
+the alt text is worth updating.
 
-| File | Source | Used for |
-|---|---|---|
-| `assets/img/hero-dr-ayon-gupta.webp` / `.jpg` | cropped from `dr-ayon-gupta.png` | Hero portrait. 816×544, `fetchpriority="high"`, never lazy-loaded. 12 KB as WebP. |
-| `assets/img/dr-ayon-gupta.webp` / `.jpg` | cropped from `dr-ayon-gupta.png` | "The dentist you will actually be seeing" section. 800×1000, lazy. 30 KB as WebP. |
-| `assets/img/logo.webp` / `.png` | `logo.png` | Header on both pages. 280×172. |
-| `assets/img/favicon.png` | `favicon.png` | Favicon and Apple touch icon on both pages. |
-
-Both doctor crops come from the 983×1601 PNG master, which is the highest-quality
-original. The hero crop stays above the purple band in the original photo, so the
-hero sits on clean white.
-
-**There is no clinic interior photograph in the project folder.** The brief asked for
-a real clinic or doctor photo in the hero; the doctor portrait is used, since no
-clinic photo exists and the brief rules out stock imagery. **A real photo of either
-clinic's reception or surgery would be a worthwhile addition** — drop it in
-`assets/img/` and swap the `<picture>` block in the hero.
-
-No SVG logo was supplied, so the PNG is used.
-
-Images were converted with ffmpeg (`libwebp`). ImageMagick and `cwebp` are not
-installed on this machine; note that on Windows, `convert` on the PATH is the
-Microsoft filesystem utility, **not** ImageMagick.
+A note on the hero photo: it is a studio shot on a **white and purple** backdrop, not the
+plain white one the design assumed. The photo therefore sits in a white card with a soft
+shadow over a tint arch that peeks out above it, rather than blending into the card.
+A cut-out of the subject on a transparent background would look better here, if one exists.
 
 ---
 
-## 10. Deploying to Hostinger
+## 10. Deploying
 
-1. **Pick the subdirectory**, e.g. `/15-off/`. The final URL will be
-   `https://guptasdental.com/15-off/`.
-2. **Fill in `js/config.js` first** — at minimum the six prices, the real expiry
-   date and the GTM ID (§1).
-3. **Zip the contents of this folder** — the files themselves, not the `2nd lp`
-   folder. The zip should open onto `index.html`, `css/`, `js/` and `assets/`.
-   You can leave out the five original images in the root; nothing links to them.
-4. In **Hostinger → File Manager**, go to `public_html`, create the subdirectory,
-   upload the zip into it and **Extract** there.
-5. Check that `index.html` sits at `public_html/15-off/index.html` — not nested in a
-   second folder. Every path on the page is relative, so it works at any depth as
-   long as `css/`, `js/` and `assets/` sit beside `index.html`.
-6. **Open the page over HTTPS** and confirm the logo, the hero photo, the fonts and
-   the live "open now" pill all appear.
-7. **Submit one real test booking end to end.** Use a real mobile number you can
-   answer. Confirm:
-   - the browser lands on `thank-you.html` with the clinic and treatment in the URL,
-   - **a new row appears in the clinic's Google Sheet** with the right clinic,
-     treatment and 10-digit number,
-   - `generate_lead` fires in GTM Preview,
-   - the clinic actually receives the lead.
-   Then delete the test row from the sheet.
-8. **Test one call click and one WhatsApp click** on a real phone, and confirm
-   `click_call` and `click_whatsapp` appear in GTM Preview.
-9. In Google Ads, set the **final URL** to the page plus any `?t=` / `?clinic=`
-   parameters (§5), and set the **conversion** to the `thank-you.html` page view or
-   the `generate_lead` event.
+Upload the whole folder as-is. There is nothing to build and nothing to install.
 
-### After uploading
+1. Set `gtmId` in `js/config.js`.
+2. If you want the GTM `<noscript>` fallback, uncomment the block near the top of
+   `<body>` in **both** HTML files and paste the same container ID in.
+3. Upload.
+4. Open the live page, submit one test lead, and confirm it reaches the sheet.
+5. Delete the test row.
 
-- The page is `noindex, follow` on purpose, so it will not compete with the organic
-  site. Do not remove that tag.
-- Gzip and caching come from Hostinger's default `.htaccess`. The Lighthouse scores
-  above were measured with both enabled; without compression, performance drops by
-  roughly 13 points.
+`index.html` and `thank-you.html` are both `noindex, follow` — they are paid-traffic
+pages and should not compete with guptasdental.com in organic search. Remove the
+`robots` meta tag only if that changes.
